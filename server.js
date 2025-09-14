@@ -34,12 +34,30 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ===== API Routes =====
 
-// Save location
+// Save location (avoid duplicates)
 app.post('/api/receive-location', async (req, res) => {
   try {
-    const { token, latitude, longitude, accuracy, timestamp } = req.body;
-    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    let { token, latitude, longitude, accuracy, timestamp } = req.body;
+
+    latitude = parseFloat(latitude);
+    longitude = parseFloat(longitude);
+    accuracy = accuracy ? parseFloat(accuracy) : null;
+
+    if (isNaN(latitude) || isNaN(longitude)) {
       return res.status(400).json({ ok: false, error: 'invalid lat/lon' });
+    }
+
+    // Check if same data already exists in last few seconds
+    const lastRecord = await Location.findOne({ token }).sort({ timestamp: -1 });
+
+    if (
+      lastRecord &&
+      lastRecord.latitude === latitude &&
+      lastRecord.longitude === longitude &&
+      Math.abs(new Date(timestamp || Date.now()) - lastRecord.timestamp) < 5000 // 5 sec gap
+    ) {
+      console.log("⚠️ Duplicate ignored for token:", token);
+      return res.json({ ok: true, id: lastRecord._id, duplicate: true });
     }
 
     const record = new Location({
@@ -59,6 +77,7 @@ app.post('/api/receive-location', async (req, res) => {
     res.status(500).json({ ok: false, error: "server error" });
   }
 });
+
 
 // Get locations
 app.get('/api/locations', async (req, res) => {
